@@ -1,0 +1,86 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 27,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "_base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "warnings": {
+                "dev": true,
+                "deprecated": true
+            }
+        },
+        {
+            "name": "macos-debug",
+            "displayName": "macOS arm64 (Debug)",
+            "inherits": "_base",
+            "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin"},
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "arm64-osx",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "macos-relwithdebinfo",
+            "displayName": "macOS arm64 (RelWithDebInfo)",
+            "inherits": "macos-debug",
+            "cacheVariables": {"CMAKE_BUILD_TYPE": "RelWithDebInfo"}
+        },
+        {
+            "name": "linux-debug",
+            "displayName": "Linux x64 (Debug, requires GCC 13+)",
+            "inherits": "_base",
+            "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux"},
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-linux",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "linux-relwithdebinfo",
+            "displayName": "Linux x64 (RelWithDebInfo)",
+            "inherits": "linux-debug",
+            "cacheVariables": {"CMAKE_BUILD_TYPE": "RelWithDebInfo"}
+        },
+        {
+            "name": "windows-debug",
+            "displayName": "Windows x64 (Debug)",
+            "inherits": "_base",
+            "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows"},
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "windows-relwithdebinfo",
+            "displayName": "Windows x64 (RelWithDebInfo)",
+            "inherits": "windows-debug",
+            "cacheVariables": {"CMAKE_BUILD_TYPE": "RelWithDebInfo"}
+        }
+    ],
+    "buildPresets": [
+        {"name": "macos-debug", "configurePreset": "macos-debug"},
+        {"name": "macos-relwithdebinfo", "configurePreset": "macos-relwithdebinfo"},
+        {"name": "linux-debug", "configurePreset": "linux-debug"},
+        {"name": "linux-relwithdebinfo", "configurePreset": "linux-relwithdebinfo"},
+        {"name": "windows-debug", "configurePreset": "windows-debug"},
+        {"name": "windows-relwithdebinfo", "configurePreset": "windows-relwithdebinfo"}
+    ],
+    "testPresets": [
+        {"name": "macos-debug", "configurePreset": "macos-debug", "output": {"outputOnFailure": true}},
+        {"name": "linux-debug", "configurePreset": "linux-debug", "output": {"outputOnFailure": true}},
+        {"name": "windows-debug", "configurePreset": "windows-debug", "output": {"outputOnFailure": true}}
+    ]
+}

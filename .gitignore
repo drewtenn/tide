@@ -1,0 +1,38 @@
+# Build artifacts
+build/
+out/
+cmake-build-*/
+.cache/
+
+# vcpkg
+vcpkg_installed/
+vcpkg/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+CMakeUserPresets.json
+
+# Compile databases
+compile_commands.json
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+
+# Profiler captures
+*.tracy
+captures/
+
+# Tools (keep)
+!cmake/
+!docs/
+!engine/
+!samples/
+!tests/
+!.claude/
+!.claude-octopus/

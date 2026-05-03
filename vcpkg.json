@@ -1,0 +1,70 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+    "name": "tide-engine",
+    "version": "0.0.1",
+    "description": "tide: a competent indie C++ game engine",
+    "license": "MIT",
+    "dependencies": [
+        "glm",
+        "spdlog",
+        "fmt",
+        {
+            "name": "glfw3",
+            "platform": "!wasm32",
+            "features": []
+        },
+        "doctest",
+        {
+            "name": "tracy",
+            "default-features": false,
+            "features": ["on-demand"]
+        },
+        {
+            "name": "imgui",
+            "features": ["docking-experimental"]
+        }
+    ],
+    "features": {
+        "metal": {
+            "description": "Metal RHI backend (Phase 1, macOS only)",
+            "supports": "osx",
+            "dependencies": [
+                {
+                    "name": "imgui",
+                    "features": ["metal-binding"]
+                }
+            ]
+        },
+        "vulkan": {
+            "description": "Vulkan RHI backend (Phase 2)",
+            "dependencies": [
+                "vulkan-headers",
+                "vulkan-memory-allocator",
+                {
+                    "name": "imgui",
+                    "features": ["vulkan-binding"]
+                }
+            ]
+        },
+        "d3d12": {
+            "description": "DX12 RHI backend (Phase 2.5, Windows only)",
+            "supports": "windows",
+            "dependencies": [
+                "directx-headers",
+                "directx-dxc",
+                {
+                    "name": "imgui",
+                    "features": ["dx12-binding"]
+                }
+            ]
+        }
+    },
+    "overrides": [
+        {
+            "name": "fmt",
+            "version": "11.0.2",
+            "$comment": "Pinned to match spdlog's bundled-fmt expectation. See ADR-0008."
+        }
+    ],
+    "builtin-baseline": "4ebb30167f14487dcb71fac13efbf63273ab6a3f"
+}
