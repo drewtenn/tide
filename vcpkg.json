@@ -22,6 +22,13 @@
         {
             "name": "imgui",
             "features": ["docking-experimental"]
+        },
+        "spirv-cross",
+        "xxhash",
+        {
+            "name": "directx-dxc",
+            "$comment": "Locked DEFINE D20: macOS path uses brew or Vulkan SDK; vcpkg port excluded there.",
+            "platform": "!osx"
         }
     ],
     "features": {

@@ -19,9 +19,21 @@ The companion design doc (`game_engine_plan.md`) stays the architectural source 
 | [0040](./0040-networking-deferral.md) | Networking — explicitly out of scope for v1 | Accepted | P0 | — |
 | [0041](./0041-cpp-hot-reload.md) | C++ hot-reload — none for P0–P7 | Accepted | P0 | — |
 
+## Index — Phase 1 ADRs
+
+| # | Title | Status | Phase | Load-bearing? |
+|---|---|---|---|---|
+| [0003](./0003-rhi-handle-strategy.md) | RHI handle strategy — opaque integer (generation+index), no virtual on resources | Accepted | P1 | **yes** |
+| [0004](./0004-shader-pipeline.md) | Shader pipeline — HLSL → SPIR-V (DXC) → MSL (SPIRV-Cross), CMake-driven | Accepted | P1 | **yes** |
+| [0005](./0005-memory-model.md) | Memory model — `BufferDesc::memory_type` enum (DeviceLocal / Upload / Readback) | Accepted | P1 | **yes** |
+| [0006](./0006-bindless-vs-descriptor-sets.md) | Bindless vs descriptor sets — descriptor sets in P1, bindless deferred (lean) | Accepted | P1 | **yes** |
+| [0010](./0010-reversed-z-depth.md) | Reversed-Z depth — enum supports it now, adopt in P4 | Accepted | P1/P4 | — |
+| [0011](./0011-jobs-system.md) | Jobs system — work-stealing thread pool, no fibers | Accepted | P1 | **yes** |
+| [0012](./0012-rhi-error-handling.md) | RHI error handling — `expected<T, RhiError>` + recording-error accumulator | Accepted | P1 | — |
+
 ## Reserved numbers (future ADRs from the implementation plan)
 
-ADRs 0003–0006, 0010–0036, 0042–onward are reserved by the implementation plan for decisions that land in later phases. Do not reuse these numbers.
+ADRs 0013–0036, 0042–onward are reserved by the implementation plan for decisions that land in later phases. Do not reuse these numbers.
 
 ## Authoring template
 

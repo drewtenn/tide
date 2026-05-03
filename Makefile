@@ -44,7 +44,7 @@ test-release: release
 	ctest --preset $(PRESET_RELEASE) --output-on-failure
 
 run-%: debug
-	$(BUILD_DIR)/$(PRESET_DEBUG)/samples/$*/$*
+	cd $(BUILD_DIR)/$(PRESET_DEBUG)/samples/$* && ./$*
 
 help:
 	@echo "Targets:"

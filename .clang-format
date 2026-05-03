@@ -1,0 +1,63 @@
+# tide engine clang-format style
+# Based on LLVM with engine-specific tweaks. Keep diffs minimal — the goal is
+# consistency, not aesthetics. Run `clang-format -i` over engine/, samples/,
+# and tests/. The CI lane runs --dry-run --Werror.
+
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++20
+
+ColumnLimit: 100
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+ConstructorInitializerIndentWidth: 4
+
+AccessModifierOffset: -4
+NamespaceIndentation: None
+FixNamespaceComments: true
+ShortNamespaceLines: 1
+
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+SpaceAfterCStyleCast: true
+
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortBlocksOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: false
+AllowShortLambdasOnASingleLine: All
+AllowShortCaseLabelsOnASingleLine: false
+
+BreakBeforeBraces: Attach
+BreakConstructorInitializers: BeforeColon
+BreakInheritanceList: BeforeColon
+BreakBeforeBinaryOperators: None
+
+AlignAfterOpenBracket: BlockIndent
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignTrailingComments: true
+
+# Include order: own header → other tide headers → third-party → std.
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:    '^"tide/'
+    Priority: 1
+  - Regex:    '^<tide/'
+    Priority: 1
+  - Regex:    '^<(GLFW|glm|spdlog|fmt|tracy|imgui|doctest)/'
+    Priority: 2
+  - Regex:    '^<.*\.h>'
+    Priority: 4
+  - Regex:    '^<.*>'
+    Priority: 5
+  - Regex:    '.*'
+    Priority: 3
+
+InsertNewlineAtEOF: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+SeparateDefinitionBlocks: Always

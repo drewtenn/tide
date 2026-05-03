@@ -34,5 +34,12 @@ captures/
 !engine/
 !samples/
 !tests/
-!.claude/
 !.claude-octopus/
+
+# Local Claude Code config — per-machine settings + scheduler lock + transient
+# session caches. Keep out of the repo entirely; each developer has their own.
+.claude/
+
+# Per-session orchestrator state — rewritten on every workflow run, no value to commit.
+.claude-octopus/state.json
+.claude-octopus/state.json.backup

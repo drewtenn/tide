@@ -1,0 +1,31 @@
+# TSAN suppressions for the work-stealing job system stress tests.
+#
+# Goal: catch genuine races in tide::jobs::WorkStealingJobSystem and the
+# Chase-Lev deque (when it's wired up in Phase 2). Suppress only races
+# that are known-benign or live in third-party code we don't own.
+#
+# Format: https://github.com/google/sanitizers/wiki/ThreadSanitizerSuppressions
+#
+# Each entry must include a brief justification comment. If a suppression
+# starts surfacing related warnings in tide:: code, REMOVE the suppression
+# and fix the code — the suppression is not a bug-management tool.
+
+# --- libstdc++ and libc++ internals ---------------------------------------
+# std::call_once / std::shared_ptr atomic refcount have benign-by-design
+# races that TSAN flags as data races. The standard library is correct;
+# the warnings are noise. (Common across every TSAN run, not tide-specific.)
+race:^std::__1::__call_once
+race:^std::__1::shared_ptr
+
+# --- glibc / pthread shutdown -----------------------------------------------
+# Process-shutdown teardown of pthread_atfork handlers occasionally races
+# with statics. The engine doesn't control libc; not actionable.
+race:^__pthread_atfork
+called_from_lib:libc.so.6
+
+# --- spdlog --------------------------------------------------------------
+# spdlog's queue uses lock-free patterns that TSAN doesn't fully model.
+# The library is widely-deployed and not under our control; suppress the
+# library-internal frames but keep races visible if a tide:: caller is
+# in the chain.
+called_from_lib:libspdlog

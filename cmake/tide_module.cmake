@@ -32,7 +32,7 @@ function(tide_add_module)
             $<INSTALL_INTERFACE:include>
         )
         target_link_libraries(${_target} INTERFACE ${MOD_PUBLIC_DEPS})
-        target_compile_features(${_target} INTERFACE cxx_std_20)
+        target_compile_features(${_target} INTERFACE cxx_std_23)
     else()
         # Auto-discover sources if not provided.
         if(NOT MOD_SOURCES)
@@ -47,7 +47,7 @@ function(tide_add_module)
                 $<BUILD_INTERFACE:${_inc_root}>
             )
             target_link_libraries(${_target} INTERFACE ${MOD_PUBLIC_DEPS})
-            target_compile_features(${_target} INTERFACE cxx_std_20)
+            target_compile_features(${_target} INTERFACE cxx_std_23)
         else()
             add_library(${_target} STATIC ${MOD_SOURCES})
             target_include_directories(${_target}
@@ -60,7 +60,7 @@ function(tide_add_module)
                 PUBLIC ${MOD_PUBLIC_DEPS}
                 PRIVATE ${MOD_PRIVATE_DEPS}
             )
-            target_compile_features(${_target} PUBLIC cxx_std_20)
+            target_compile_features(${_target} PUBLIC cxx_std_23)
             set_target_properties(${_target} PROPERTIES
                 CXX_STANDARD_REQUIRED ON
                 CXX_EXTENSIONS OFF

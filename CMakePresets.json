@@ -52,6 +52,20 @@
             "cacheVariables": {"CMAKE_BUILD_TYPE": "RelWithDebInfo"}
         },
         {
+            "name": "linux-tsan",
+            "displayName": "Linux x64 (TSAN — work-stealing job system, Phase 1 task 13)",
+            "inherits": "linux-debug",
+            "cacheVariables": {
+                "CMAKE_C_FLAGS_INIT":             "-fsanitize=thread -O1 -g",
+                "CMAKE_CXX_FLAGS_INIT":           "-fsanitize=thread -O1 -g",
+                "CMAKE_EXE_LINKER_FLAGS_INIT":    "-fsanitize=thread",
+                "CMAKE_SHARED_LINKER_FLAGS_INIT": "-fsanitize=thread",
+                "CMAKE_MODULE_LINKER_FLAGS_INIT": "-fsanitize=thread",
+                "$comment_tracy": "Tracy's atomic-instrumented client conflicts with TSAN's race detector — disable for this lane.",
+                "TIDE_ENABLE_TRACY":              "OFF"
+            }
+        },
+        {
             "name": "windows-debug",
             "displayName": "Windows x64 (Debug)",
             "inherits": "_base",
@@ -75,12 +89,14 @@
         {"name": "macos-relwithdebinfo", "configurePreset": "macos-relwithdebinfo"},
         {"name": "linux-debug", "configurePreset": "linux-debug"},
         {"name": "linux-relwithdebinfo", "configurePreset": "linux-relwithdebinfo"},
+        {"name": "linux-tsan", "configurePreset": "linux-tsan"},
         {"name": "windows-debug", "configurePreset": "windows-debug"},
         {"name": "windows-relwithdebinfo", "configurePreset": "windows-relwithdebinfo"}
     ],
     "testPresets": [
         {"name": "macos-debug", "configurePreset": "macos-debug", "output": {"outputOnFailure": true}},
         {"name": "linux-debug", "configurePreset": "linux-debug", "output": {"outputOnFailure": true}},
+        {"name": "linux-tsan", "configurePreset": "linux-tsan", "output": {"outputOnFailure": true}},
         {"name": "windows-debug", "configurePreset": "windows-debug", "output": {"outputOnFailure": true}}
     ]
 }
