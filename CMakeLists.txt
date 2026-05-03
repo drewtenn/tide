@@ -50,6 +50,7 @@ include(tide_module)
 
 option(TIDE_BUILD_SAMPLES "Build sample executables" ON)
 option(TIDE_BUILD_TESTS "Build unit tests" ON)
+option(TIDE_BUILD_TOOLS "Build offline tools (asset cooker, etc.)" ON)
 option(TIDE_ENABLE_TRACY "Enable Tracy profiler instrumentation" ON)
 
 # ─── RHI backend selection (locked DEFINE D22) ──────────────────────────────
@@ -95,6 +96,11 @@ add_subdirectory(engine/scripting)
 add_subdirectory(engine/gameplay)
 add_subdirectory(engine/imgui-integration)
 
+# ─── Tools (offline; not linked into runtime) ───────────────────────────────
+if(TIDE_BUILD_TOOLS)
+    add_subdirectory(tools/asset-cooker)
+endif()
+
 # ─── Samples & tests ────────────────────────────────────────────────────────
 if(TIDE_BUILD_SAMPLES)
     add_subdirectory(samples)
@@ -117,4 +123,5 @@ message(STATUS "  Tracy:           ${TIDE_ENABLE_TRACY}")
 message(STATUS "  RHI backends:    Metal=${TIDE_RHI_METAL} Vulkan=${TIDE_RHI_VULKAN} D3D12=${TIDE_RHI_D3D12}")
 message(STATUS "  Samples:         ${TIDE_BUILD_SAMPLES}")
 message(STATUS "  Tests:           ${TIDE_BUILD_TESTS}")
+message(STATUS "  Tools:           ${TIDE_BUILD_TOOLS}")
 message(STATUS "")

@@ -1,0 +1,127 @@
+// Generated from test_mesh_runtime.cpp.in via configure_file().
+// CMake substitutes @TIDE_TEST_MESH_FIXTURE@ with the path to a cooked
+// artifact produced by `tide_cooker` at build time.
+
+#include "tide/assets/MeshAsset.h"
+#include "tide/assets/RuntimeFormat.h"
+#include "tide/assets/Uuid.h"
+#include "tide/cooker/Version.h"
+
+#include <doctest/doctest.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <vector>
+
+namespace {
+
+constexpr const char* kFixturePath = "@TIDE_TEST_MESH_FIXTURE@";
+
+[[nodiscard]] std::vector<std::byte> read_file(const char* path) {
+    std::ifstream f(path, std::ios::binary | std::ios::ate);
+    REQUIRE(f.is_open());
+    const auto end = f.tellg();
+    f.seekg(0, std::ios::beg);
+    std::vector<std::byte> bytes(static_cast<std::size_t>(end));
+    REQUIRE(f.read(reinterpret_cast<char*>(bytes.data()), end));
+    return bytes;
+}
+
+} // namespace
+
+TEST_SUITE("assets/MeshRuntime") {
+    TEST_CASE("triangle fixture round-trips through cooker -> RelOffset chain") {
+        using tide::assets::AssetKind;
+        using tide::assets::MeshPayload;
+        using tide::assets::RuntimeHeader;
+        using tide::assets::SubMesh;
+        using tide::assets::Vertex;
+        using tide::assets::kRuntimeMagic;
+
+        const auto bytes = read_file(kFixturePath);
+        REQUIRE(bytes.size() >= sizeof(RuntimeHeader) + sizeof(MeshPayload));
+
+        // Header
+        RuntimeHeader header{};
+        std::memcpy(&header, bytes.data(), sizeof(header));
+        CHECK(header.magic          == kRuntimeMagic);
+        CHECK(header.kind           == static_cast<std::uint32_t>(AssetKind::Mesh));
+        CHECK(header.schema_version == tide::assets::kMeshSchemaVersion);
+        CHECK(header.cooker_version == tide::cooker::kVersion);
+        CHECK(header.payload_size   == bytes.size() - sizeof(RuntimeHeader));
+
+        // UUID matches the .meta sidecar (a1b2c3d4-...-5678).
+        const auto expected_uuid = tide::assets::Uuid::parse("a1b2c3d4-e5f6-4789-9abc-def012345678");
+        REQUIRE(expected_uuid.has_value());
+        CHECK(header.uuid == *expected_uuid);
+
+        // The MeshPayload lives immediately after the header. Cast in place
+        // (the bytes are the same buffer the runtime would mmap).
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast) — wire format
+        const auto* payload = reinterpret_cast<const MeshPayload*>(
+            bytes.data() + sizeof(RuntimeHeader));
+
+        CHECK(payload->vertex_count  == 3);
+        CHECK(payload->index_count   == 3);
+        CHECK(payload->submesh_count == 1);
+
+        REQUIRE(payload->vertices.valid());
+        REQUIRE(payload->indices.valid());
+        REQUIRE(payload->submeshes.valid());
+
+        // Vertex 0 = (0,0,0), normal = (0,0,1), uv = (0,0).
+        const Vertex* verts = payload->vertices.get();
+        CHECK(verts[0].position[0] == 0.0f);
+        CHECK(verts[0].position[1] == 0.0f);
+        CHECK(verts[0].position[2] == 0.0f);
+        CHECK(verts[0].normal[2]   == 1.0f);
+        CHECK(verts[0].uv[0]       == 0.0f);
+        CHECK(verts[0].uv[1]       == 0.0f);
+
+        // Vertex 1 = (1,0,0), uv = (1,0).
+        CHECK(verts[1].position[0] == 1.0f);
+        CHECK(verts[1].position[1] == 0.0f);
+        CHECK(verts[1].uv[0]       == 1.0f);
+
+        // Vertex 2 = (0,1,0), uv = (0,1).
+        CHECK(verts[2].position[1] == 1.0f);
+        CHECK(verts[2].uv[1]       == 1.0f);
+
+        // Indices: 0, 1, 2 as uint32.
+        const std::uint32_t* idx = payload->indices.get();
+        CHECK(idx[0] == 0u);
+        CHECK(idx[1] == 1u);
+        CHECK(idx[2] == 2u);
+
+        // Single submesh covers the whole index range.
+        const SubMesh* sm = payload->submeshes.get();
+        CHECK(sm[0].first_index   == 0u);
+        CHECK(sm[0].index_count   == 3u);
+        CHECK(sm[0].material_slot == 0u);
+
+        // AABB tightly bounds the unit triangle in the XY plane.
+        CHECK(payload->local_bounds.min[0] == 0.0f);
+        CHECK(payload->local_bounds.min[1] == 0.0f);
+        CHECK(payload->local_bounds.min[2] == 0.0f);
+        CHECK(payload->local_bounds.max[0] == 1.0f);
+        CHECK(payload->local_bounds.max[1] == 1.0f);
+        CHECK(payload->local_bounds.max[2] == 0.0f);
+    }
+
+    TEST_CASE("RelOffset null target round-trips as invalid") {
+        using tide::assets::RelOffset;
+        RelOffset<int> r{};
+        CHECK_FALSE(r.valid());
+        CHECK(r.get() == nullptr);
+
+        int target = 42;
+        r.set_target(&target);
+        CHECK(r.valid());
+        CHECK(*r.get() == 42);
+
+        r.set_target(nullptr);
+        CHECK_FALSE(r.valid());
+    }
+}

@@ -26,6 +26,14 @@
         "spirv-cross",
         "xxhash",
         {
+            "name": "nlohmann-json",
+            "$comment": "Cooker host-only: parses .meta sidecar files (ADR-0016). Header-only; never linked into runtime."
+        },
+        {
+            "name": "cgltf",
+            "$comment": "Cooker host-only: glTF 2.0 mesh import (ADR-0018). Header-only; never linked into runtime."
+        },
+        {
             "name": "directx-dxc",
             "$comment": "Locked DEFINE D20: macOS path uses brew or Vulkan SDK; vcpkg port excluded there.",
             "platform": "!osx"

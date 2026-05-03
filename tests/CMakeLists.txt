@@ -3,13 +3,54 @@
 
 find_package(doctest CONFIG REQUIRED)
 
+# ─── Mesh fixture: cooked at build time, used by test_mesh_runtime ──────────
+# A pre-cooked triangle.tide artifact. Built only when both TIDE_BUILD_TOOLS
+# is on (so the cooker exists) and TIDE_BUILD_TESTS is on. The path is baked
+# into the generated test_mesh_runtime.cpp via configure_file().
+if(TIDE_BUILD_TOOLS)
+    set(_mesh_fixture_in   "${CMAKE_SOURCE_DIR}/tests/fixtures/cooker/triangle.gltf")
+    set(_mesh_fixture_meta "${CMAKE_SOURCE_DIR}/tests/fixtures/cooker/triangle.gltf.meta")
+    set(_mesh_fixture_out  "${CMAKE_BINARY_DIR}/tests/fixtures/cooker-out/triangle.tide")
+
+    add_custom_command(
+        OUTPUT  "${_mesh_fixture_out}"
+        COMMAND $<TARGET_FILE:tide_cooker>
+                --in    "${_mesh_fixture_in}"
+                --out   "${_mesh_fixture_out}"
+                --kind  mesh
+                --hints "${_mesh_fixture_meta}"
+        DEPENDS tide_cooker "${_mesh_fixture_in}" "${_mesh_fixture_meta}"
+        COMMENT "Cooking test mesh fixture: triangle.gltf -> triangle.tide"
+        VERBATIM
+    )
+    add_custom_target(tide_test_mesh_fixture DEPENDS "${_mesh_fixture_out}")
+
+    set(TIDE_TEST_MESH_FIXTURE "${_mesh_fixture_out}")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/unit/assets/test_mesh_runtime.cpp.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/unit/assets/test_mesh_runtime.cpp"
+        @ONLY
+    )
+    set(_tide_mesh_runtime_test "${CMAKE_CURRENT_BINARY_DIR}/unit/assets/test_mesh_runtime.cpp")
+endif()
+
 add_executable(tide_tests
     unit/main.cpp
     unit/core/test_handle.cpp
     unit/jobs/test_inline_jobs.cpp
     unit/jobs/test_work_stealing.cpp
     unit/input/test_action_compile_time.cpp
+    unit/assets/test_uuid.cpp
+    unit/assets/test_asset_db.cpp
+    ${_tide_mesh_runtime_test}
 )
+
+if(TIDE_BUILD_TOOLS)
+    add_dependencies(tide_tests tide_test_mesh_fixture)
+    target_include_directories(tide_tests PRIVATE
+        "${CMAKE_SOURCE_DIR}/tools/asset-cooker/include"
+    )
+endif()
 
 # test_work_stealing.cpp pulls in the WorkStealingJobSystem private header
 # directly (engine/jobs/src/) — same pattern other tests would use to reach
@@ -23,6 +64,7 @@ target_link_libraries(tide_tests PRIVATE
     Tide::core
     Tide::jobs
     Tide::input
+    Tide::assets
 )
 
 # Register every TEST_CASE as a separate ctest test for granular reporting.
@@ -71,6 +113,41 @@ if(TIDE_SHADER_TOOLCHAIN_AVAILABLE)
     )
 else()
     message(STATUS "Shader smoke test SKIPPED — DXC not found.")
+endif()
+
+# ─── Cooker scaffold smoke (Phase 3 task 4) ─────────────────────────────────
+# Header-shape smoke: cook a `manifest`-kind input (which still uses the
+# placeholder emitter — no source-format parsing required) and assert the
+# RuntimeHeader bytes match ADR-0017's wire format. The mesh path is covered
+# end-to-end by the doctest in test_mesh_runtime.cpp.
+if(TIDE_BUILD_TOOLS)
+    set(_cooker_fixture_in   "${CMAKE_SOURCE_DIR}/tests/fixtures/cooker/floor.gltf")
+    set(_cooker_fixture_meta "${CMAKE_SOURCE_DIR}/tests/fixtures/cooker/floor.gltf.meta")
+    set(_cooker_fixture_out  "${CMAKE_BINARY_DIR}/tests/fixtures/cooker-out/floor.tide")
+
+    add_test(
+        NAME tide_cooker_smoke_cook
+        COMMAND $<TARGET_FILE:tide_cooker>
+            --in    "${_cooker_fixture_in}"
+            --out   "${_cooker_fixture_out}"
+            --kind  manifest
+    )
+    set_tests_properties(tide_cooker_smoke_cook PROPERTIES
+        FIXTURES_SETUP tide_cooker_smoke_artifact
+    )
+
+    add_test(
+        NAME tide_cooker_smoke_verify
+        COMMAND ${CMAKE_COMMAND}
+            -DARTIFACT=${_cooker_fixture_out}
+            -DEXPECTED_MAGIC=54494445
+            -DEXPECTED_KIND=01000000
+            -DEXPECTED_UUID_HEX=00000000000000000000000000000000
+            -P ${CMAKE_SOURCE_DIR}/cmake/VerifyCookedArtifact.cmake
+    )
+    set_tests_properties(tide_cooker_smoke_verify PROPERTIES
+        FIXTURES_REQUIRED tide_cooker_smoke_artifact
+    )
 endif()
 
 # ─── Offscreen-hash golden test (Phase 1 task 10) ───────────────────────────

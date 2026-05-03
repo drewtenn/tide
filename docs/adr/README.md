@@ -31,9 +31,26 @@ The companion design doc (`game_engine_plan.md`) stays the architectural source 
 | [0011](./0011-jobs-system.md) | Jobs system — work-stealing thread pool, no fibers | Accepted | P1 | **yes** |
 | [0012](./0012-rhi-error-handling.md) | RHI error handling — `expected<T, RhiError>` + recording-error accumulator | Accepted | P1 | — |
 
+## Index — Phase 2-lite ADRs (pulled forward into Phase 3)
+
+Phase 2 (Vulkan) and Phase 2.5 (DX12) are deferred. The engine continues on Metal-only through P3+. This ADR is the only Phase-2 item still owed; golden-frame CI on Metal already shipped from P1 (`tests/CMakeLists.txt:83`).
+
+| # | Title | Status | Phase | Load-bearing? |
+|---|---|---|---|---|
+| [0042](./0042-interface-abi-versioning.md) | Interface ABI versioning + `[[deprecated]]` two-phase removal | Accepted | P2-lite | **yes** |
+
+## Index — Phase 3 ADRs
+
+| # | Title | Status | Phase | Load-bearing? |
+|---|---|---|---|---|
+| [0015](./0015-hot-reload-scope.md) | Hot-reload scope — shaders in P3, mesh/texture/material in P5+ | Accepted | P3 | **yes** |
+| [0016](./0016-asset-guid-strategy.md) | Asset GUID — UUID v4 in `.meta` sidecar files, version-controlled | Accepted | P3 | **yes** |
+| [0017](./0017-runtime-binary-format.md) | Runtime binary format — self-relative offsets, schema-versioned, mmap-friendly | Accepted | P3 | **yes** |
+| [0018](./0018-asset-cooker.md) | Asset cooker — standalone CLI invoked by CMake, content-hash cache | Accepted | P3 | **yes** |
+
 ## Reserved numbers (future ADRs from the implementation plan)
 
-ADRs 0013–0036, 0042–onward are reserved by the implementation plan for decisions that land in later phases. Do not reuse these numbers.
+ADRs 0013–0014, 0019–0036, 0043–onward are reserved by the implementation plan for decisions that land in later phases. Do not reuse these numbers.
 
 ## Authoring template
 
