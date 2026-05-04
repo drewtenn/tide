@@ -33,6 +33,7 @@ const char* to_string(AssetError e) noexcept {
         case AssetError::LoadFailed:      return "LoadFailed";
         case AssetError::Unsupported:     return "Unsupported";
         case AssetError::PoolExhausted:   return "PoolExhausted";
+        case AssetError::AlreadyInFlight: return "AlreadyInFlight";
     }
     return "<invalid AssetError>";
 }

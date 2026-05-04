@@ -43,6 +43,7 @@ add_executable(tide_tests
     unit/input/test_action_compile_time.cpp
     unit/assets/test_uuid.cpp
     unit/assets/test_asset_db.cpp
+    unit/assets/test_asset_db_async.cpp
     unit/assets/test_mmap_file.cpp
     unit/assets/test_texture_loader.cpp
     unit/assets/test_shader_loader.cpp

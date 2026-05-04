@@ -14,18 +14,33 @@
 #include "tide/assets/Asset.h"
 #include "tide/assets/Uuid.h"
 #include "tide/core/Expected.h"
+#include "tide/core/Handle.h"
 
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 
+// Forward decls — IJobSystem is a private impl detail of load_async; keeping it
+// out of this header lets `Tide::assets` link against `Tide::jobs` PRIVATE.
+// Callers of load_async must include <tide/jobs/IJobSystem.h> for JobHandle ops.
+namespace tide::jobs {
+struct JobTag;
+using JobHandle = ::tide::Handle<JobTag>;
+class IJobSystem;
+} // namespace tide::jobs
+
 namespace tide::assets {
 
 class IAssetLoader;
+class MmapFile;
 
 class AssetDB {
 public:
     AssetDB();
+    // Async-capable ctor. The job system pointer must outlive the AssetDB and
+    // is used by load_async() to dispatch loader work onto worker threads. May
+    // be nullptr (in which case load_async() returns AssetError::Unsupported).
+    explicit AssetDB(jobs::IJobSystem* jobs);
     ~AssetDB();
     AssetDB(const AssetDB&) = delete;
     AssetDB& operator=(const AssetDB&) = delete;
@@ -77,9 +92,14 @@ public:
     }
 
     // ─── Loader-facing transitions ──────────────────────────────────────────
-    // Loaders call these from worker threads when load completes. AssetDB
-    // does no further validation; the loader is trusted because it was
-    // registered via register_loader().
+    // UUID-keyed completion sinks. Used by `load_blocking()` for failure
+    // reporting on the synchronous path. NOT safe to call from a worker
+    // thread that races with `release()` — UUID lookup happens after a
+    // potential slot reuse and would mis-flip the freshly allocated slot.
+    // Async completion goes through the private generation-keyed path
+    // (`complete_load_success`/`complete_load_failed`); external callers
+    // should prefer `load_async()` rather than calling mark_loaded/mark_failed
+    // directly from a worker thread.
     void mark_loaded(Uuid uuid, void* payload) noexcept;
     void mark_failed(Uuid uuid, AssetError error) noexcept;
 
@@ -99,6 +119,32 @@ public:
     [[nodiscard]] tide::expected<void, AssetError>
         load_blocking(Uuid uuid, const std::filesystem::path& path);
 
+    // ─── Async load (P3 task 7) ─────────────────────────────────────────────
+    // Submit the load_blocking() pipeline as a job on the injected IJobSystem.
+    // Returns the JobHandle so the caller can wait on completion or poll via
+    // jobs::IJobSystem::is_complete(); the slot's AssetState transitions to
+    // Loaded or Failed when the job finishes (lock-free poll via state(h)).
+    //
+    // Dedup: the first call for a given (slot index, generation) submits a
+    // job; concurrent or subsequent calls before the slot is freed return
+    // AssetError::AlreadyInFlight. Callers that just want to wait should use
+    // request<T>() (which dedups by UUID) and poll state(handle).
+    //
+    // Cancellation is best-effort: a slot freed via release() before the job
+    // runs is detected by an internal generation check and the loader's
+    // payload (if any) is dropped without publishing it. A job already
+    // executing the loader will run to completion.
+    //
+    // Preconditions: ctor must have received a non-null IJobSystem*; a
+    // request<T>(uuid) must already have created the slot in Pending state;
+    // a loader for the slot's AssetKind must be registered.
+    //
+    // Lifetime: ~AssetDB() drains all in-flight load jobs before returning,
+    // so the AssetDB and registered loaders may be destroyed without UAF
+    // even if the caller never waits on the returned JobHandle.
+    [[nodiscard]] tide::expected<jobs::JobHandle, AssetError>
+        load_async(Uuid uuid, std::filesystem::path path);
+
     // ─── Diagnostics ────────────────────────────────────────────────────────
     [[nodiscard]] std::size_t live_count() const noexcept;
     [[nodiscard]] std::size_t pending_count() const noexcept;
@@ -116,6 +162,19 @@ private:
     [[nodiscard]] AssetState state_impl(UntypedHandle h) const noexcept;
     [[nodiscard]] AssetError error_impl(UntypedHandle h) const noexcept;
     [[nodiscard]] const void* payload_impl(UntypedHandle h) const noexcept;
+
+    // Generation-keyed completion sinks invoked from the load_async lambda.
+    // UUID-keyed mark_loaded()/mark_failed() are unsafe under release()/reuse
+    // — these check (slot_index, generation) and silently discard stale
+    // completions. See AssetDB.cpp:load_async.
+    void complete_load_success(std::uint32_t slot_index,
+                               std::uint32_t generation,
+                               IAssetLoader* loader,
+                               void*         payload,
+                               MmapFile&&    mmap) noexcept;
+    void complete_load_failed(std::uint32_t slot_index,
+                              std::uint32_t generation,
+                              AssetError    err) noexcept;
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

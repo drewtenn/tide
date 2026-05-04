@@ -14,5 +14,6 @@ tide_add_module(
     PUBLIC_DEPS
         Tide::core
     PRIVATE_DEPS
+        Tide::jobs
         xxHash::xxhash
 )

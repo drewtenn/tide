@@ -77,6 +77,7 @@ enum class AssetError : std::uint32_t {  // NOLINT(performance-enum-size) — ma
     LoadFailed,       // payload-specific decode or GPU-upload error
     Unsupported,      // operation not supported (e.g. reload() for non-shader in P3 — ADR-0015)
     PoolExhausted,    // AssetDB slot pool full
+    AlreadyInFlight,  // load_async called for a UUID whose load job is already submitted
 };
 
 [[nodiscard]] const char* to_string(AssetState s) noexcept;
