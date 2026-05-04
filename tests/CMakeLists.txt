@@ -2,6 +2,7 @@
 # and contributes its own .cpp files to a single test executable.
 
 find_package(doctest CONFIG REQUIRED)
+find_package(xxHash  CONFIG REQUIRED)
 
 # ─── Mesh fixture: cooked at build time, used by test_mesh_runtime ──────────
 # A pre-cooked triangle.tide artifact. Built only when both TIDE_BUILD_TOOLS
@@ -42,6 +43,9 @@ add_executable(tide_tests
     unit/input/test_action_compile_time.cpp
     unit/assets/test_uuid.cpp
     unit/assets/test_asset_db.cpp
+    unit/assets/test_mmap_file.cpp
+    unit/assets/test_texture_loader.cpp
+    unit/assets/test_shader_loader.cpp
     ${_tide_mesh_runtime_test}
 )
 
@@ -65,6 +69,12 @@ target_link_libraries(tide_tests PRIVATE
     Tide::jobs
     Tide::input
     Tide::assets
+    # xxhash is needed by test_texture_loader / test_shader_loader to
+    # compute the content_hash of synthesized cooked-artifact byte
+    # buffers (the loaders verify it on load). The loader implementations
+    # also use xxhash but link it PRIVATE on Tide::assets, so consumers
+    # have to bring it in independently.
+    xxHash::xxhash
 )
 
 # Register every TEST_CASE as a separate ctest test for granular reporting.

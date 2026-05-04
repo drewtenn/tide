@@ -11,8 +11,11 @@
 #include "Args.h"
 #include "MeshCooker.h"
 #include "MetaFile.h"
+#include "ShaderCooker.h"
+#include "TextureCooker.h"
 
 #include "tide/assets/RuntimeFormat.h"
+#include "tide/assets/ShaderAsset.h"
 #include "tide/cooker/Version.h"
 
 #include <cstdio>
@@ -115,6 +118,74 @@ using tide::assets::schema_version_for;
                           cooked->content_hash);
 }
 
+// Texture dispatch: stb_image -> RGBA8 + mips (P3 task 4).
+[[nodiscard]] int emit_texture(const std::filesystem::path&       in,
+                               const std::filesystem::path&       out,
+                               const Uuid&                        uuid,
+                               const tide::cooker::Args&          args) {
+    tide::cooker::TextureCookHints hints{};
+    hints.srgb          = args.texture_srgb;
+    hints.generate_mips = args.texture_generate_mips;
+
+    auto cooked = tide::cooker::cook_texture(in, uuid, hints);
+    if (!cooked) {
+        std::fprintf(stderr, "tide-cooker: texture cook failed for '%s' (%s)\n",
+                     in.string().c_str(),
+                     tide::cooker::to_string(cooked.error()));
+        return 1;
+    }
+    return write_artifact(out, AssetKind::Texture, uuid,
+                          cooked->payload_bytes.data(),
+                          cooked->payload_bytes.size(),
+                          cooked->content_hash);
+}
+
+// Shader dispatch: HLSL -> SPIR-V via DXC + MSL/reflection via SPIRV-Cross
+// (P3 task 5).
+[[nodiscard]] tide::assets::ShaderStage stage_from_args(tide::cooker::Args::Stage s) noexcept {
+    using Cli = tide::cooker::Args::Stage;
+    switch (s) {
+        case Cli::Vertex:   return tide::assets::ShaderStage::Vertex;
+        case Cli::Fragment: return tide::assets::ShaderStage::Fragment;
+        case Cli::Compute:  return tide::assets::ShaderStage::Compute;
+        case Cli::Unset:    return tide::assets::ShaderStage::Unknown;
+    }
+    return tide::assets::ShaderStage::Unknown;
+}
+
+[[nodiscard]] int emit_shader(const std::filesystem::path&       in,
+                              const std::filesystem::path&       out,
+                              const Uuid&                        uuid,
+                              const tide::cooker::Args&          args) {
+    if (args.shader_stage == tide::cooker::Args::Stage::Unset) {
+        std::fprintf(stderr,
+                     "tide-cooker: --kind shader requires --stage <vs|ps|cs>\n");
+        return 2;
+    }
+    if (!args.shader_dxc || !args.shader_spirv_cross) {
+        std::fprintf(stderr,
+                     "tide-cooker: --kind shader requires --dxc <path> and --spirv-cross <path>\n");
+        return 2;
+    }
+    tide::cooker::ShaderCookHints hints{};
+    hints.stage            = stage_from_args(args.shader_stage);
+    hints.entry_point      = args.shader_entry;
+    hints.dxc_path         = *args.shader_dxc;
+    hints.spirv_cross_path = *args.shader_spirv_cross;
+
+    auto cooked = tide::cooker::cook_shader(in, uuid, hints);
+    if (!cooked) {
+        std::fprintf(stderr, "tide-cooker: shader cook failed for '%s' (%s)\n",
+                     in.string().c_str(),
+                     tide::cooker::to_string(cooked.error()));
+        return 1;
+    }
+    return write_artifact(out, AssetKind::Shader, uuid,
+                          cooked->payload_bytes.data(),
+                          cooked->payload_bytes.size(),
+                          cooked->content_hash);
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -163,7 +234,9 @@ int main(int argc, char** argv) {
         case AssetKind::Mesh:
             return emit_mesh(args->input, args->output, uuid);
         case AssetKind::Texture:
+            return emit_texture(args->input, args->output, uuid, *args);
         case AssetKind::Shader:
+            return emit_shader(args->input, args->output, uuid, *args);
         case AssetKind::Material:
         case AssetKind::Manifest:
             return emit_placeholder(args->output, kind, uuid);

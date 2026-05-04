@@ -11,10 +11,22 @@ const char* to_string(ArgError e) noexcept {
         case ArgError::UnknownFlag:     return "UnknownFlag";
         case ArgError::MissingRequired: return "MissingRequired";
         case ArgError::UnknownKind:     return "UnknownKind";
+        case ArgError::UnknownStage:    return "UnknownStage";
         case ArgError::DuplicateFlag:   return "DuplicateFlag";
     }
     return "<invalid ArgError>";
 }
+
+namespace {
+
+[[nodiscard]] tide::expected<Args::Stage, ArgError> parse_stage(std::string_view s) noexcept {
+    if (s == "vs") return Args::Stage::Vertex;
+    if (s == "ps") return Args::Stage::Fragment;
+    if (s == "cs") return Args::Stage::Compute;
+    return tide::unexpected{ArgError::UnknownStage};
+}
+
+} // namespace
 
 tide::expected<tide::assets::AssetKind, ArgError> parse_kind(std::string_view s) noexcept {
     if (s == "mesh")     return tide::assets::AssetKind::Mesh;
@@ -79,6 +91,32 @@ tide::expected<Args, ArgError> parse_args(int argc, const char* const argv[]) {
             if (!v) return tide::unexpected{v.error()};
             out.cache_dir = std::filesystem::path{*v};
             saw_cache     = true;
+        } else if (a == "--srgb") {
+            out.texture_srgb = true;
+        } else if (a == "--linear") {
+            out.texture_srgb = false;
+        } else if (a == "--no-mips") {
+            out.texture_generate_mips = false;
+        } else if (a == "--mips") {
+            out.texture_generate_mips = true;
+        } else if (a == "--stage") {
+            auto v = read_value(argc, argv, i);
+            if (!v) return tide::unexpected{v.error()};
+            auto s = parse_stage(*v);
+            if (!s) return tide::unexpected{s.error()};
+            out.shader_stage = *s;
+        } else if (a == "--entry") {
+            auto v = read_value(argc, argv, i);
+            if (!v) return tide::unexpected{v.error()};
+            out.shader_entry = std::string{*v};
+        } else if (a == "--dxc") {
+            auto v = read_value(argc, argv, i);
+            if (!v) return tide::unexpected{v.error()};
+            out.shader_dxc = std::filesystem::path{*v};
+        } else if (a == "--spirv-cross") {
+            auto v = read_value(argc, argv, i);
+            if (!v) return tide::unexpected{v.error()};
+            out.shader_spirv_cross = std::filesystem::path{*v};
         } else {
             return tide::unexpected{ArgError::UnknownFlag};
         }

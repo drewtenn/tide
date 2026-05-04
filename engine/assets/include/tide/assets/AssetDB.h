@@ -16,6 +16,7 @@
 #include "tide/core/Expected.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 
 namespace tide::assets {
@@ -81,6 +82,22 @@ public:
     // registered via register_loader().
     void mark_loaded(Uuid uuid, void* payload) noexcept;
     void mark_failed(Uuid uuid, AssetError error) noexcept;
+
+    // ─── Synchronous load (P3 task 6) ───────────────────────────────────────
+    // mmap a cooked artifact, validate the header, dispatch to the
+    // registered loader, and transition the slot to Loaded. The mmap is
+    // owned by the AssetDB slot and is released when the slot's last
+    // reference drops (via release()).
+    //
+    // Preconditions: a `request<T>()` for `uuid` must already be live
+    // (the slot exists in `Pending`) and a loader for the right `AssetKind`
+    // must be registered. Hot path is mmap + memcmp(header) + xxh3
+    // + cast — sub-millisecond per ADR-0017.
+    //
+    // P3 task 7 wraps this in a worker-pool job and exposes an async
+    // pump; the synchronous form remains for tests and bootstrap loads.
+    [[nodiscard]] tide::expected<void, AssetError>
+        load_blocking(Uuid uuid, const std::filesystem::path& path);
 
     // ─── Diagnostics ────────────────────────────────────────────────────────
     [[nodiscard]] std::size_t live_count() const noexcept;

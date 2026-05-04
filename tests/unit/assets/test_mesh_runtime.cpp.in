@@ -2,7 +2,9 @@
 // CMake substitutes @TIDE_TEST_MESH_FIXTURE@ with the path to a cooked
 // artifact produced by `tide_cooker` at build time.
 
+#include "tide/assets/AssetDB.h"
 #include "tide/assets/MeshAsset.h"
+#include "tide/assets/MeshLoader.h"
 #include "tide/assets/RuntimeFormat.h"
 #include "tide/assets/Uuid.h"
 #include "tide/cooker/Version.h"
@@ -123,5 +125,80 @@ TEST_SUITE("assets/MeshRuntime") {
 
         r.set_target(nullptr);
         CHECK_FALSE(r.valid());
+    }
+
+    TEST_CASE("AssetDB::load_blocking mmaps fixture, dispatches to MeshLoader, exposes payload") {
+        using tide::assets::AssetDB;
+        using tide::assets::AssetError;
+        using tide::assets::AssetState;
+        using tide::assets::MeshAsset;
+        using tide::assets::MeshLoader;
+        using tide::assets::Uuid;
+        using tide::assets::Vertex;
+
+        AssetDB db;
+        MeshLoader loader;
+        REQUIRE(db.register_loader(&loader).has_value());
+
+        const auto uuid = Uuid::parse("a1b2c3d4-e5f6-4789-9abc-def012345678");
+        REQUIRE(uuid.has_value());
+
+        const auto handle = db.request<MeshAsset>(*uuid);
+        REQUIRE(handle.has_value());
+        CHECK(db.state(*handle) == AssetState::Pending);
+
+        const auto r = db.load_blocking(*uuid, kFixturePath);
+        REQUIRE(r.has_value());
+
+        CHECK(db.state(*handle) == AssetState::Loaded);
+        const auto* mesh = db.get(*handle);
+        REQUIRE(mesh != nullptr);
+        CHECK(mesh->vertex_count == 3);
+        CHECK(mesh->index_count  == 3);
+        REQUIRE(mesh->vertices.valid());
+        const Vertex* verts = mesh->vertices.get();
+        CHECK(verts[1].position[0] == 1.0f);
+
+        // Re-loading over an already-Loaded slot is rejected — the
+        // hot-reload swap goes through IAssetLoader::reload() (P3 task
+        // 10), not load_blocking. This guards against a UAF where a
+        // second mmap overwrites the slot's mapping while readers still
+        // hold pointers into the old one.
+        const auto rr = db.load_blocking(*uuid, kFixturePath);
+        REQUIRE_FALSE(rr.has_value());
+        CHECK(rr.error() == AssetError::Unsupported);
+        CHECK(db.state(*handle) == AssetState::Loaded);  // unchanged
+
+        // Releasing the handle drops the mmap; subsequent state() reads
+        // see the stale handle as Failed (generation bumped).
+        db.release(*handle);
+        CHECK(db.live_count() == 0);
+        CHECK(db.state(*handle) == AssetState::Failed);
+        CHECK(db.get(*handle) == nullptr);
+    }
+
+    TEST_CASE("AssetDB::load_blocking on a missing file marks the slot Failed with IoError") {
+        using tide::assets::AssetDB;
+        using tide::assets::AssetError;
+        using tide::assets::AssetState;
+        using tide::assets::MeshAsset;
+        using tide::assets::MeshLoader;
+        using tide::assets::Uuid;
+
+        AssetDB db;
+        MeshLoader loader;
+        REQUIRE(db.register_loader(&loader).has_value());
+
+        const auto uuid = Uuid::make_v4();
+        const auto handle = db.request<MeshAsset>(uuid);
+        REQUIRE(handle.has_value());
+
+        const auto r = db.load_blocking(uuid, "/tmp/__tide_definitely_missing.tide");
+        REQUIRE_FALSE(r.has_value());
+        CHECK(r.error() == AssetError::IoError);
+
+        CHECK(db.state(*handle) == AssetState::Failed);
+        CHECK(db.error_of(*handle) == AssetError::IoError);
+        db.release(*handle);
     }
 }

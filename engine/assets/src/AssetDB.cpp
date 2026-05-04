@@ -1,6 +1,7 @@
 #include "tide/assets/AssetDB.h"
 
 #include "tide/assets/IAssetLoader.h"
+#include "tide/assets/MmapFile.h"
 #include "tide/core/Log.h"
 
 #include <array>
@@ -28,6 +29,12 @@ struct Slot {
     std::uint32_t              generation{kInitialGeneration};
     bool                       alive{false};
     std::uint32_t              next_free{kInvalidIndex};
+    // Cooked-artifact mmap. The loader's returned payload pointer is an
+    // offset into these bytes (zero-copy load), so the mapping must live
+    // at least as long as the slot. Released alongside the slot in
+    // release_impl(). Default-constructed (empty) until load_blocking
+    // succeeds.
+    MmapFile                   mmap{};
 
     Slot() = default;
     Slot(const Slot&)            = delete;
@@ -49,7 +56,8 @@ struct Slot {
           ref_count(o.ref_count.load(std::memory_order_relaxed)),
           generation(o.generation),
           alive(o.alive),
-          next_free(o.next_free) {}
+          next_free(o.next_free),
+          mmap(std::move(o.mmap)) {}
     Slot& operator=(Slot&&) = delete;
 };
 
@@ -191,6 +199,11 @@ void AssetDB::release_impl(UntypedHandle h) noexcept {
     s.alive = false;
     s.payload.store(nullptr, std::memory_order_relaxed);
     s.state.store(AssetState::Failed, std::memory_order_relaxed);
+    // Release the mmap last, so the loader's unload() (above) can still
+    // dereference any pointers into the mapped bytes if needed. P3 loaders
+    // are stateless wrappers around the mmap, but P5+ loaders may keep
+    // GPU resources keyed off the payload pointer.
+    s.mmap = MmapFile{};
     ++s.generation;
     if (s.generation == 0) {
         s.generation = kInitialGeneration; // skip 0 (null-handle generation)
@@ -270,6 +283,96 @@ void AssetDB::mark_failed(Uuid uuid, AssetError err) noexcept {
     }
     s.error.store(err, std::memory_order_release);
     s.state.store(AssetState::Failed, std::memory_order_release);
+}
+
+// ─── Synchronous load (P3 task 6) ───────────────────────────────────────────
+
+tide::expected<void, AssetError>
+AssetDB::load_blocking(Uuid uuid, const std::filesystem::path& path) {
+    // Step 1 — locate the slot, capture its generation, and reject any
+    // attempt to re-load over an already-Loaded slot. Re-load is a P3
+    // task 10 concern (hot-reload) and requires the deferred-destroy
+    // infrastructure that doesn't land until P4's frame graph; for
+    // tasks 4-6 we intentionally close the door on it so a second
+    // load_blocking() can't munmap bytes a reader is still pointing into.
+    IAssetLoader* loader     = nullptr;
+    std::uint32_t slot_index = kInvalidIndex;
+    std::uint32_t generation = 0;
+    {
+        std::shared_lock lock(impl_->mutex);
+        auto it = impl_->uuid_to_index.find(uuid);
+        if (it == impl_->uuid_to_index.end()) {
+            return tide::unexpected{AssetError::NotFound};
+        }
+        slot_index = it->second;
+        const Slot& s = impl_->slots[slot_index];
+        if (!s.alive) {
+            return tide::unexpected{AssetError::NotFound};
+        }
+        if (s.state.load(std::memory_order_acquire) != AssetState::Pending) {
+            // Already Loaded or Failed. Re-loading via this path is not
+            // supported in P3; ShaderLoader::reload() (P3 task 10) is the
+            // sanctioned re-load surface and goes through the deferred-
+            // destroy retired-resource list.
+            return tide::unexpected{AssetError::Unsupported};
+        }
+        generation = s.generation;
+        const auto kind_idx = Impl::kind_index(s.kind);
+        if (kind_idx >= impl_->loaders_by_kind.size()) {
+            return tide::unexpected{AssetError::Unsupported};
+        }
+        loader = impl_->loaders_by_kind[kind_idx];
+        if (loader == nullptr) {
+            return tide::unexpected{AssetError::Unsupported};
+        }
+    }
+
+    // Step 2 — open the mmap. No locks held; concurrent loads can run.
+    auto mmap = MmapFile::open_read(path);
+    if (!mmap) {
+        mark_failed(uuid, mmap.error());
+        return tide::unexpected{mmap.error()};
+    }
+    const auto bytes = mmap->bytes();
+
+    // Step 3 — dispatch to the loader. The loader validates the
+    // RuntimeHeader, runs the xxh3 content check, and returns a payload
+    // pointer pointing into the mmap's bytes.
+    auto loaded = loader->load(uuid, bytes);
+    if (!loaded) {
+        mark_failed(uuid, loaded.error());
+        return tide::unexpected{loaded.error()};
+    }
+    void* payload = *loaded;
+
+    // Step 4 — install the mmap on the slot and transition to Loaded.
+    // The generation check below is what distinguishes "same slot, same
+    // request" from "slot was released and re-allocated for a new request
+    // that happens to share the UUID" — a UUID-only check would silently
+    // graft this load onto the new request.
+    {
+        std::unique_lock lock(impl_->mutex);
+        Slot& s = impl_->slots[slot_index];
+        if (!s.alive || s.uuid != uuid || s.generation != generation) {
+            // Slot was released (and possibly re-allocated) between
+            // step 1 and now. Drop the loader's payload — the mmap is
+            // about to be munmapped, so any pointers into it are dead.
+            // For P3 loaders payload-release is a no-op, but the
+            // contract leaves room for P5+ loaders that own GPU
+            // resources.
+            loader->unload(payload);
+            return tide::unexpected{AssetError::NotFound};
+        }
+        // The Pending check at step 1 + the generation check above + the
+        // unique_lock here together guarantee we're the only writer
+        // installing a payload into this generation of this slot. No
+        // existing mmap to retire.
+        s.mmap    = std::move(*mmap);
+        s.payload.store(payload, std::memory_order_release);
+        s.state.store(AssetState::Loaded, std::memory_order_release);
+    }
+
+    return {};
 }
 
 // ─── Diagnostics ────────────────────────────────────────────────────────────
